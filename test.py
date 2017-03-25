@@ -25,28 +25,16 @@ symfuns = list(map(lambda s : (x - s.x)**2 +\
                               (z - s.z)**2 -\
                               (c * (s.t - d))**2, satellites))
 
-def F(p_x,p_y,p_z,p_d):
-    return  list(map(lambda f : lambdify((x,y,z,d), f)(p_x,p_y,p_z,p_d), symfuns))
+def F(vec):
+    return list(map(lambda f : lambdify((x,y,z,d), f)(vec[0],vec[1],vec[2],vec[3]), symfuns))
 
-DF_list = [];
-
-for f in symfuns:
-    DF_list.append([lambdify(x, f.diff(x), 'numpy'),
-                    lambdify(y, f.diff(y), 'numpy'),
-                    lambdify(z, f.diff(z), 'numpy'),
-                    lambdify(d, f.diff(d), 'numpy')])
+jacobi = list(map(lambda f : list(map(lambda s : lambdify(s, f.diff(s), 'numpy'), [x,y,z,d])), symfuns))
 
 def DF(vec):
-    out = []
-    for f_vec in DF_list:
-        tmp = []
-        for i in range(0, 4):
-            tmp.append(f_vec[i](vec[i]))    
-        out.append(tmp)
-    return out
+    return list(map(lambda f_vec : list(map(lambda i : f_vec[i](vec[i]), range(0, 4))),jacobi))
 
 x0 = [0,0,6370,0] # initial vector
 
-for i in range(1, 11):
-    x0 = x0 - np.dot(np.linalg.inv(DF(x0)), F(x0[0], x0[1], x0[2], x0[3]))
+for i in range(0, 10):
+    x0 = x0 - np.dot(np.linalg.inv(DF(x0)), F(x0))
     print('iter #', i, ': ', x0)
