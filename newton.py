@@ -129,3 +129,36 @@ for e1 in range(-1, 2):
 # finn kondisjonstall, altså største EMF
 
 print('max EMF : ', max(emfs))
+
+
+# - - - Appendix Lambda - - - #
+
+#     map(f, l)
+# map tar to parametre, en funksjon f og en liste l
+# deretter tar den hvert element i l og bruker de som
+# input til funksjonen f, returverdien legges i en
+# ny liste som returneres av map-funksjonen
+# output-lista vil ha samme størrelse som l
+
+#     lambda parametre : funksjonskropp
+# lambda er en funksjon som returnerer anonyme funksjoner
+# eksempel:
+#     lambda x, y : 2 * x - y
+# i eksempelet så har vi nå en anonym funksjon som tar
+# to argumenter og returnerer en utregning av dem
+# matte-ekvivalent: f(x, y) = 2x - y
+# eneste forskjellen er at du ikke kan kalle på den
+# ved å bruke f
+# hvor enn du kan bruke en funksjon kan du heller bruke
+# lambda hvis det ikke er noe poeng i å ha en referanse
+
+# samlet eksempel
+# la oss doble alle elementene i en liste
+#
+# input  >>> liste = [1, 2, 3]
+# input  >>> list(map(lambda x : 2 * x, liste))
+# output >>> [2, 4, 6]
+#
+# dette kan også gjøres med en anonym liste
+# input  >>> list(map(lambda x : 2 * x, [1, 2, 3]))
+# output >>> [2, 4, 6]
