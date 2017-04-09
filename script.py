@@ -10,7 +10,7 @@ import random
 # konstanter
 
 c = 299792.458
-err = 10e-8
+err = 1e-8
 actual_pos = [0,0,6370,0]
 earthrad = 6370
 
@@ -34,22 +34,22 @@ def newtons_satellites(satellites, x0):
     syms = (Symbol('x'), Symbol('y'), Symbol('z'), Symbol('d'))
 
     # lag en ligning for hver satellitt
-    
+
     symfuns = list(map(lambda s : (syms[0] - s.x)**2 +\
                    (syms[1] - s.y)**2 +\
                    (syms[2] - s.z)**2 -\
                    (c * (s.t - syms[3]))**2, satellites))
-    
+
     def F(vec):
         return list(map(lambda f : lambdify(syms, f)(vec[0], vec[1], vec[2], vec[3]), symfuns))
 
     # her konstruerer vi jacobi-matrisen ved å partiellderivere
     # hver av funksjonene fra symfuns med hensyn på hver av
     # de symbolse variablene, så vi får en kvadratisk matrise av funksjoner
-    
+
     jacobi = list(map(lambda f : list(map(lambda s : lambdify(s, f.diff(s), 'numpy'), syms)), symfuns))
 
-    def DF(vec): 
+    def DF(vec):
         return list(map(lambda f_vec : list(map(lambda i : f_vec[i](vec[i]), range(0, 4))),jacobi))
 
     df = []
@@ -76,16 +76,22 @@ def quadratic_formula(sats):
 
     u = [[],[],[],[],[]] # [ux, uy, uz, ud, w]
 
-    for i in range(0, 3):
+    # de neste ~10 linjene tar for seg konverteringen av vår 4x4 matrise
+    # til et 3-liknings-system som kan for d
+
+    for i in range(0, 3): # fyll ut ux, uy, ud og w
         for j in range(0, 4):
             u[j].append(sats[3 - i][j] - s[j])
         u[4].append(c**2 * (s[3]**2 - sats[3 - i][3]**2) +
                             s[0]**2 - sats[3 - i][0]**2 +
                             s[1]**2 - sats[3 - i][1]**2 +
-                            s[2]**2 - sats[3 - i][2]**2) 
+                            s[2]**2 - sats[3 - i][2]**2)
 
     u[3] = list(map(lambda t : -2 * c**2 * t, u[3]))
-    
+
+    # finn a, b og c for x, y og z ved å regne determinanten
+    # av respektive vektorkombinasjoner
+
     ax = np.linalg.det(np.matrix.transpose(np.array([u[1],u[2],u[0]])))
     bx = np.linalg.det(np.matrix.transpose(np.array([u[1],u[2],u[3]])))
     cx = np.linalg.det(np.matrix.transpose(np.array([u[1],u[2],u[4]])))
@@ -98,9 +104,14 @@ def quadratic_formula(sats):
     bz = np.linalg.det(np.matrix.transpose(np.array([u[0],u[1],u[3]])))
     cz = np.linalg.det(np.matrix.transpose(np.array([u[0],u[1],u[4]])))
 
+    # regn ut a, b og c for d, i praksis substituerer vi nå x, y og z fra de originale likningene
+
     abc_a = (bx/ax)**2 + (by/ay)**2 + (bz/az)**2 - c**2
     abc_b = 2 * (bx/ax) * (cx/ax + s[0]) + 2 * (by/ay) * (cy/ay+s[1]) + 2 * (bz/az+s[2]) + 2 * c**2 * s[3]
     abc_c = (cx/ax + s[0])**2 + (cy/ay+s[1])**2 + (cz/az+s[2])**2 - c**2 * s[3]**2
+
+    # kvadratformelen vi løser for d
+    # d1 = det første svaret, d2 = det andre svaret
 
     if abc_b > 0:
         d1 = -((abc_b + sqrt(abc_b**2 - 4 * abc_a * abc_c)) / (2 * abc_a))
@@ -109,28 +120,71 @@ def quadratic_formula(sats):
         d1 = (-abc_b + sqrt(abc_b**2 - 4 * abc_a * abc_c)) / (2 * abc_a)
         d2 = (2 * abc_c) / (-abc_b + sqrt(abc_b**2 - 4 * abc_a * abc_c))
 
+    # vi returnerer [x, y, z, d] for begge mulige d, så kan noen på utsiden
+    # forkaste det svaret som ikke ligger på jordas overflate
+
     return [[-(cx / ax + (bx / ax) * d1), -(cy / ay + (by / ay) * d1), -(cz / az + (bz / az) * d1), d1],
             [-(cx / ax + (bx / ax) * d2), -(cy / ay + (by / ay) * d2), -(cz / az + (bz / az) * d2), d2]]
 
-# test 1: referansesatellitter fra oppgaven
-# vi tester disse koordinatene og forsinkelsene for å se om det stemmer med fasit
+def gauss_newton_n_satellites(sat_data, x0, rho):
+    sats = list(map(lambda data :
+                                Satellite(rho*cos(data[0])*cos(data[1]),
+                                          rho*cos(data[0])*sin(data[1]),
+                                          rho*sin(data[0]),
+                                          x0[3] + sqrt((rho*cos(data[0])*cos(data[1]))**2 +
+                                                   (rho*cos(data[0])*sin(data[1]))**2 +
+                                                       (rho*sin(data[0]) - x0[2])**2)/c + data[2]),
+                                       sat_data))
+    for i in range(0, 10):
+        f = np.matrix.transpose(np.array(list(map(lambda s : (x0[0] - s.x)**2 +
+                                (x0[1] - s.y)**2 +
+                                (x0[2] - s.z)**2 -
+                     (c * s.t - x0[3])**2, sats))))
 
-satellites = [Satellite(15600, 7540, 20140, 0.07074),
-              Satellite(18760, 2750, 18610, 0.07220),
-              Satellite(17610, 14630, 13480, 0.07690),
-              Satellite(19170, 610, 18390, 0.07242)]
+        jacobi = np.array(list(map(lambda s : [2 * (x0[0] - s.x),
+                                               2 * (x0[1] - s.y),
+                                               2 * (x0[2] - s.z),
+                                               2 * c**2 * (s.t - x0[3])], sats)))
 
-init_vec = [5,5,earthrad,0]
+        A = np.matrix.transpose(jacobi) * jacobi
+        b = -(jacobi * f)
 
-print('\nsolution : ', newtons_satellites(satellites, init_vec)[0], '\n\n')
-#print('quadratic formula', quadratic_formula(list(map(lambda s : [s.x,s.y,s.z,s.t],satellites))),'\n')
+        x0 += np.linalg.lstsq(A,b)[0]
+    return x0
 
-# test 2: feilmåling
-# tester med vilkårlige satellittposisjoner
-# vi har satt en feilmargin på 1e-8
-# alle 81 kombinasjoner av feil sjekkes, så tar vi høyeste EMFaktor
-# eksempel på kombinasjon: +1e-8 på t1, ingen endring på t2 og -1e-8 på t3 og t4
+# her finner vi kondisjonstall for n satellitter
+def find_emfs_n(data):
+    emfs = [] # samle alle EMF i en liste
 
+    for test in range(0, 20): # prøv 20 ganger for å få et utvalg av feilfordelinger
+        for s in range(0, len(data)):
+            data[i][2] = err * random.choice([-1, 0, 1])
+
+        # estimer posisjon med gitte feil
+
+        approx = gauss_newton_n_satellites(data, init_vec, 26570)
+
+        # regn ut delta-verdier
+
+        for i in range(0, len(approx[0])):
+            approx[0][i] -= actual_pos[i]
+
+        f_err = max(list(map(lambda val : abs(val),approx[0])))
+
+        delta_err = [e1 * err, e2 * err, e3 * err, e4 * err]
+
+        b_err = max(list(map(lambda val : abs(val), delta_err)))
+
+        if(b_err > 0): # (ett tilfelle hvor err er 0)
+            emfs.append(f_err/(c * b_err)) # emf = foroverfeil/(c*bakoverfeil)
+
+        # finn kondisjonstall, altså største EMF
+        for i in range(0, len(data)):
+            print('satellitt #', (i + 1), ' phi = ', data[i][0], ' theta = ', data[i][1])
+
+    return max(emfs)
+
+# denne funksjonen finner kondisjonstall med 4 satellitter
 def find_emfs(data):
     emfs = [] # samle alle EMF i en liste
 
@@ -147,20 +201,20 @@ def find_emfs(data):
                     data[3][2] = e4 * err
 
                     # estimer posisjon med gitte feil
-                    
+
                     approx = newtons_satellites_polar(data, init_vec, 26570)
 
                     # regn ut delta-verdier
-                
+
                     for i in range(0, len(approx[0])):
                         approx[0][i] -= actual_pos[i]
-                    
+
                     f_err = max(list(map(lambda val : abs(val),approx[0])))
 
                     delta_err = [e1 * err, e2 * err, e3 * err, e4 * err]
 
                     b_err = max(list(map(lambda val : abs(val), delta_err))) # (denne blir alltids err (untatt 1 gang))
-                
+
                     if(b_err > 0): # (ett tilfelle hvor err er 0)
                         emfs.append(f_err/(c * b_err)) # emf = foroverfeil/(c*bakoverfeil)
 
@@ -168,6 +222,25 @@ def find_emfs(data):
     for i in range(0, len(data)):
         print('satellitt #', (i + 1), ' phi = ', data[i][0], ' theta = ', data[i][1])
     return max(emfs)
+
+
+# test 1: referansesatellitter fra oppgaven
+# vi tester disse koordinatene og forsinkelsene for å se om det stemmer med fasit
+
+satellites = [Satellite(15600, 7540, 20140, 0.07074),
+              Satellite(18760, 2750, 18610, 0.07220),
+              Satellite(17610, 14630, 13480, 0.07690),
+              Satellite(19170, 610, 18390, 0.07242)]
+
+init_vec = [5,5,earthrad,0]
+
+print('\nsolution : ', newtons_satellites(satellites, init_vec)[0], '\n\n')
+
+# test 2: feilmåling
+# tester med vilkårlige satellittposisjoner
+# vi har satt en feilmargin på 1e-8
+# alle 81 kombinasjoner av feil sjekkes, så tar vi høyeste EMFaktor
+# eksempel på kombinasjon: +1e-8 på t1, ingen endring på t2 og -1e-8 på t3 og t4
 
 # tester først med helt tilfeldige satellitter
 
@@ -178,11 +251,9 @@ scattered_data = [[0.41,1.1,0],[0.53,2.2,0],[0.35,3.3,0],[0.42,4.4,0]]
 
 for i in range(0, 4): # generer tilfeldige phi og theta for hver satellitt
     random_data.append([np.random.uniform(0, math.pi / 2), np.random.uniform(0, 2 * math.pi), 0])
-
 print('\nkondisjonstall - tilfeldige satellitter :', find_emfs(random_data),'\n')
 print('\nkondisjonstall - nære satellitter :', find_emfs(close_data),'\n')
 print('\nkondisjonstall - spredte satellitter :', find_emfs(scattered_data),'\n')
-
 
 # - - - Appendix Lambda - - - #
 
