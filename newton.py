@@ -89,46 +89,57 @@ print('\nsolution : ', newtons_satellites(satellites, init_vec)[0], '\n\n')
 # alle 81 kombinasjoner av feil sjekkes, så tar vi høyeste EMFaktor
 # eksempel på kombinasjon: +1e-8 på t1, ingen endring på t2 og -1e-8 på t3 og t4
 
-data = [] # [phi, theta, error] for hver satellitt
+def find_emfs(data):
+    emfs = [] # samle alle EMF i en liste
+
+    # iterer gjennom alle kombinasjoner (treg)
+    # (alle kombinasjoner av følgende elementer [-1, 0, 1])
+
+    for e1 in range(-1, 2):
+        for e2 in range(-1, 2):
+            for e3 in range(-1, 2):
+                for e4 in range(-1, 2):
+                    data[0][2] = e1 * err
+                    data[1][2] = e2 * err
+                    data[2][2] = e3 * err
+                    data[3][2] = e4 * err
+
+                    # estimer posisjon med gitte feil
+                    
+                    approx = newtons_satellites_polar(data, init_vec, 26570)
+
+                    # regn ut delta-verdier
+                
+                    for i in range(0, len(approx[0])):
+                        approx[0][i] -= actual_pos[i]
+                    
+                    f_err = max(list(map(lambda val : abs(val),approx[0])))
+
+                    delta_err = [e1 * err, e2 * err, e3 * err, e4 * err]
+
+                    b_err = max(list(map(lambda val : abs(val), delta_err))) # (denne blir alltids err (untatt 1 gang))
+                
+                    if(b_err > 0): # (ett tilfelle hvor err er 0)
+                        emfs.append(f_err/(c * b_err)) # emf = foroverfeil/(c*bakoverfeil)
+
+    # finn kondisjonstall, altså største EMF
+
+    return max(emfs)
+
+# tester først med helt tilfeldige satellitter
+
+random_data = [] # [phi, theta, error] for hver satellitt
+close_data = [[0.211, 1.123, 0],[0.233, 1.213, 0],[0.192, 1.201, 0],[0.245, 1.101, 0]]
+scattered_data = [[0.41,1.1,0],[0.53,2.2,0],[0.35,3.3,0],[0.42,4.4,0]]
+#lined_data = []
 
 for i in range(0, 4): # generer tilfeldige phi og theta for hver satellitt
-    data.append([np.random.uniform(0, math.pi / 2), np.random.uniform(0, 2 * math.pi), 0])
+    random_data.append([np.random.uniform(0, math.pi / 2), np.random.uniform(0, 2 * math.pi), 0])
 
-emfs = [] # samle alle EMF i en liste
 
-# iterer gjennom alle kombinasjoner
-# (alle kombinasjoner av følgende elementer [-1, 0, 1])
-
-for e1 in range(-1, 2):
-    for e2 in range(-1, 2):
-        for e3 in range(-1, 2):
-            for e4 in range(-1, 2):
-                data[0][2] = e1 * err
-                data[1][2] = e2 * err
-                data[2][2] = e3 * err
-                data[3][2] = e4 * err
-
-                # estimer posisjon med gitte feil
-
-                approx = newtons_satellites_polar(data, init_vec, 26570)
-
-                # regn ut delta-verdier
-                
-                for i in range(0, len(approx[0])):
-                    approx[0][i] -= actual_pos[i]
-                    
-                f_err = max(list(map(lambda val : abs(val),approx[0])))
-
-                delta_err = [e1 * err, e2 * err, e3 * err, e4 * err]
-
-                b_err = max(list(map(lambda val : abs(val), delta_err))) # (denne blir alltids err (untatt 1 gang))
-                
-                if(b_err > 0): # (ett tilfelle hvor err er 0)
-                    emfs.append(f_err/(c * b_err)) # emf = foroverfeil/(c*bakoverfeil)
-
-# finn kondisjonstall, altså største EMF
-
-print('max EMF : ', max(emfs))
+print('\nkondisjonstall - tilfeldige satellitter :', find_emfs(random_data),'\n')
+print('\nkondisjonstall - nære satellitter :', find_emfs(close_data),'\n')
+print('\nkondisjonstall - spredte satellitter :', find_emfs(scattered_data),'\n')
 
 
 # - - - Appendix Lambda - - - #
