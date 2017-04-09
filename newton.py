@@ -10,8 +10,9 @@ import random
 # konstanter
 
 c = 299792.458
-err = 1e-8
+err = 10e-8
 actual_pos = [0,0,6370,0]
+earthrad = 6370
 
 # en klasse som representerer en satellitt med kartetiske koordinater og tid/distanse t unna målepunktet
 
@@ -70,6 +71,46 @@ def newtons_satellites_polar(sat_data, x0, rho): # sat_data = [[phi, theta, err]
                                                        (rho*sin(data[0]) - x0[2])**2)/c + data[2]),
                                        sat_data)), x0)
 
+def quadratic_formula(sats):
+    s = sats[0] # første satellitt, bruker den mye, så greit å forkorte litt
+
+    u = [[],[],[],[],[]] # [ux, uy, uz, ud, w]
+
+    for i in range(0, 3):
+        for j in range(0, 4):
+            u[j].append(sats[3 - i][j] - s[j])
+        u[4].append(c**2 * (s[3]**2 - sats[3 - i][3]**2) +
+                            s[0]**2 - sats[3 - i][0]**2 +
+                            s[1]**2 - sats[3 - i][1]**2 +
+                            s[2]**2 - sats[3 - i][2]**2) 
+
+    u[3] = list(map(lambda t : -2 * c**2 * t, u[3]))
+    
+    ax = np.linalg.det(np.matrix.transpose(np.array([u[1],u[2],u[0]])))
+    bx = np.linalg.det(np.matrix.transpose(np.array([u[1],u[2],u[3]])))
+    cx = np.linalg.det(np.matrix.transpose(np.array([u[1],u[2],u[4]])))
+
+    ay = np.linalg.det(np.matrix.transpose(np.array([u[0],u[2],u[1]])))
+    by = np.linalg.det(np.matrix.transpose(np.array([u[0],u[2],u[3]])))
+    cy = np.linalg.det(np.matrix.transpose(np.array([u[0],u[2],u[4]])))
+
+    az = np.linalg.det(np.matrix.transpose(np.array([u[0],u[1],u[2]])))
+    bz = np.linalg.det(np.matrix.transpose(np.array([u[0],u[1],u[3]])))
+    cz = np.linalg.det(np.matrix.transpose(np.array([u[0],u[1],u[4]])))
+
+    abc_a = (bx/ax)**2 + (by/ay)**2 + (bz/az)**2 - c**2
+    abc_b = 2 * (bx/ax) * (cx/ax + s[0]) + 2 * (by/ay) * (cy/ay+s[1]) + 2 * (bz/az+s[2]) + 2 * c**2 * s[3]
+    abc_c = (cx/ax + s[0])**2 + (cy/ay+s[1])**2 + (cz/az+s[2])**2 - c**2 * s[3]**2
+
+    if abc_b > 0:
+        d1 = -((abc_b + sqrt(abc_b**2 - 4 * abc_a * abc_c)) / (2 * abc_a))
+        d2 = -((2 * abc_c) / (abc_b + sqrt(abc_b**2 - 4 * abc_a * abc_c)))
+    else:
+        d1 = (-abc_b + sqrt(abc_b**2 - 4 * abc_a * abc_c)) / (2 * abc_a)
+        d2 = (2 * abc_c) / (-abc_b + sqrt(abc_b**2 - 4 * abc_a * abc_c))
+
+    return [[-(cx / ax + (bx / ax) * d1), -(cy / ay + (by / ay) * d1), -(cz / az + (bz / az) * d1), d1],
+            [-(cx / ax + (bx / ax) * d2), -(cy / ay + (by / ay) * d2), -(cz / az + (bz / az) * d2), d2]]
 
 # test 1: referansesatellitter fra oppgaven
 # vi tester disse koordinatene og forsinkelsene for å se om det stemmer med fasit
@@ -79,9 +120,10 @@ satellites = [Satellite(15600, 7540, 20140, 0.07074),
               Satellite(17610, 14630, 13480, 0.07690),
               Satellite(19170, 610, 18390, 0.07242)]
 
-init_vec = [5,5,6370,0]
+init_vec = [5,5,earthrad,0]
 
 print('\nsolution : ', newtons_satellites(satellites, init_vec)[0], '\n\n')
+#print('quadratic formula', quadratic_formula(list(map(lambda s : [s.x,s.y,s.z,s.t],satellites))),'\n')
 
 # test 2: feilmåling
 # tester med vilkårlige satellittposisjoner
@@ -123,7 +165,8 @@ def find_emfs(data):
                         emfs.append(f_err/(c * b_err)) # emf = foroverfeil/(c*bakoverfeil)
 
     # finn kondisjonstall, altså største EMF
-
+    for i in range(0, len(data)):
+        print('satellitt #', (i + 1), ' phi = ', data[i][0], ' theta = ', data[i][1])
     return max(emfs)
 
 # tester først med helt tilfeldige satellitter
@@ -135,7 +178,6 @@ scattered_data = [[0.41,1.1,0],[0.53,2.2,0],[0.35,3.3,0],[0.42,4.4,0]]
 
 for i in range(0, 4): # generer tilfeldige phi og theta for hver satellitt
     random_data.append([np.random.uniform(0, math.pi / 2), np.random.uniform(0, 2 * math.pi), 0])
-
 
 print('\nkondisjonstall - tilfeldige satellitter :', find_emfs(random_data),'\n')
 print('\nkondisjonstall - nære satellitter :', find_emfs(close_data),'\n')
